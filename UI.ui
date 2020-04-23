@@ -469,19 +469,6 @@ color: rgb(255, 0, 0);</string>
               <string>眨眼检测</string>
              </property>
             </widget>
-            <widget class="QCheckBox" name="checkBox_5">
-             <property name="geometry">
-              <rect>
-               <x>90</x>
-               <y>240</y>
-               <width>101</width>
-               <height>31</height>
-              </rect>
-             </property>
-             <property name="text">
-              <string>换脸</string>
-             </property>
-            </widget>
             <widget class="QCheckBox" name="checkBox_6">
              <property name="geometry">
               <rect>
@@ -506,6 +493,19 @@ color: rgb(255, 0, 0);</string>
              </property>
              <property name="text">
               <string>人脸识别-tensorflow</string>
+             </property>
+            </widget>
+            <widget class="QPushButton" name="pushButton">
+             <property name="geometry">
+              <rect>
+               <x>90</x>
+               <y>240</y>
+               <width>75</width>
+               <height>23</height>
+              </rect>
+             </property>
+             <property name="text">
+              <string>查看日志</string>
              </property>
             </widget>
            </widget>

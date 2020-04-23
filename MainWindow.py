@@ -1,9 +1,13 @@
+import pymysql
+
 from UI import Ui_MainWindow
+from Log import Ui_Dialog
 import sys
+from MyTipWindow import Message
 import face_recognition
 import threading
-from PIL import Image, ImageDraw
-from PyQt5.QtWidgets import QApplication, QMainWindow, QFileDialog
+from PIL import Image, ImageDraw, ImageFont
+from PyQt5.QtWidgets import QApplication, QMainWindow, QFileDialog, QSystemTrayIcon, QMessageBox, QDialog
 from PyQt5.QtCore import QTimer, QCoreApplication
 from PyQt5.QtGui import QPixmap
 import cv2
@@ -15,6 +19,7 @@ import pandas as pd
 import numpy as np
 from scipy.spatial import distance as dist
 from imutils import face_utils
+import datetime
 
 #  opencv 检测人脸
 face_detector = cv2.CascadeClassifier('D:/OPENCV/sources/data/haarcascades/haarcascade_frontalface_default.xml')
@@ -23,22 +28,31 @@ face_detector = cv2.CascadeClassifier('D:/OPENCV/sources/data/haarcascades/haarc
 ids = []
 face_names = []
 face_codings = []
+
 face_sampes = []
 person_list = os.listdir("faces/")
 for i in range(len(person_list)):
+    face_coding_mean = []
     person_name = os.listdir("faces/" + "person_" + str(i + 1))
+    #print(person_name)
     # print(person_name[len(person_name)-1])
-    img_path = "faces/" + "person_" + str(i + 1) + "/" + person_name[0]
-    face_img = face_recognition.load_image_file(img_path)
-    # opencv人脸识别
-    PIL_img = Image.open(img_path).convert('L')
-    img_numpy = np.array(PIL_img, 'uint8')
-    faces = face_detector.detectMultiScale(img_numpy)
-    # print(len(faces))
-    for x, y, w, h in faces:
-        face_sampes.append(img_numpy[y:y + h, x:x + w])
-        ids.append(i + 1)
-    face_codings.append(face_recognition.face_encodings(face_img)[0])
+
+    for j in range(len(person_name)):
+
+        img_path = "faces/" + "person_" + str(i + 1) + "/" + person_name[j]
+        #print(img_path)
+        face_img = face_recognition.load_image_file(img_path)
+        # opencv人脸识别
+
+        PIL_img = Image.open(img_path).convert('L')
+        img_numpy = np.array(PIL_img, 'uint8')
+        faces = face_detector.detectMultiScale(img_numpy)
+        # print(len(faces))
+        for x, y, w, h in faces:
+            face_sampes.append(img_numpy[y:y + h, x:x + w])
+            ids.append(i + 1)
+        face_coding_mean.append(face_recognition.face_encodings(face_img)[0])
+    face_codings.append(np.array(face_coding_mean).mean(axis=0))
     # face_names.append(person_name[0][:person_name[0].index(".")])
     face_names.append(person_name[len(person_name) - 1][:person_name[len(person_name) - 1].index(".")])
 font = cv2.FONT_HERSHEY_DUPLEX
@@ -69,17 +83,17 @@ for i in range(csv_rd.shape[0]):
 
 # 每次启动都要执行，浪费效率
 # dlib 获取特征
-#os.system("python36 getfacefeatures_to_csv.py")#程序启动后先提取所有人脸特征，防止后台手动添加人脸
+# os.system("python36 getfacefeatures_to_csv.py")#程序启动后先提取所有人脸特征，防止后台手动添加人脸
 
 # opencv训练
 # print(face_sampes)
-# print(ids)
+#print(ids)
 opencv_recognizer = cv2.face.LBPHFaceRecognizer_create()
 # opencv_recognizer.train(face_sampes, np.array(ids))
 # opencv_recognizer.write('train/train.yml')
 
-EYE_AR_THRESH = 0.25  # EAR阈值
-EYE_AR_CONSEC_FRAMES = 1  # 当EAR小于阈值时，接连多少帧一定发生眨眼动作
+EYE_AR_THRESH = 0.18  # EAR阈值
+EYE_AR_CONSEC_FRAMES = 4  # 当EAR小于阈值时，接连多少帧一定发生眨眼动作
 
 # 对应特征点的序号
 RIGHT_EYE_START = 37 - 1
@@ -88,9 +102,25 @@ LEFT_EYE_START = 43 - 1
 LEFT_EYE_END = 48 - 1
 
 
-class CamShow(QMainWindow, Ui_MainWindow):
+class childWindow(QDialog):
+    def __init__(self):
+        QDialog.__init__(self)
+        self.child=Ui_Dialog()
+
+    def show(self):
+        #self.child.loaddate()
+        self.child.setupUi(self)
+        super().show()
+
+
+
+class MainWindow(QMainWindow, Ui_MainWindow):
     camera = cv2.VideoCapture(0)
     name = ""
+    id = 0
+    flag_1 = True
+    flag_2 = True
+    flag_3 = True
     def __del__(self):
         try:
             self.camera.release()  # 释放资源
@@ -98,7 +128,7 @@ class CamShow(QMainWindow, Ui_MainWindow):
             return
 
     def __init__(self, parent=None):
-        super(CamShow, self).__init__(parent)
+        super(MainWindow, self).__init__(parent)
         self.setupUi(self)
         self.PrepSliders()
         self.PrepWidgets()
@@ -187,7 +217,8 @@ class CamShow(QMainWindow, Ui_MainWindow):
         self.RedColorSld.valueChanged.connect(self.SetR)
         self.GreenColorSld.valueChanged.connect(self.SetG)
         self.BlueColorSld.valueChanged.connect(self.SetB)
-        # self.pushButton.clicked.connect(self.facerec)
+        #self.showLog.clicked.connect(self.logView)
+
 
     def SetR(self):
         R = self.RedColorSld.value()
@@ -219,16 +250,22 @@ class CamShow(QMainWindow, Ui_MainWindow):
 
     def SetGain(self):
         gain_toset = self.GainSld.value()
+        print(gain_toset)
         try:
+            #14为增益，改为12饱和度
             self.camera.set(14, gain_toset)
+            #print(self.camera.get(5))
             self.MsgTE.setPlainText('The gain is set to ' + str(self.camera.get(14)))
         except Exception as e:
             self.MsgTE.setPlainText(str(e))
 
     def SetExposure(self):
+        exposure_time_toset = self.ExpTimeSld.value()
+        print(exposure_time_toset)
         try:
-            exposure_time_toset = self.ExpTimeSld.value()
+            #15为曝光，改为13色调图像
             self.camera.set(15, exposure_time_toset)
+            #print(self.camera.get(5))
             self.MsgTE.setPlainText('The exposure time is set to ' + str(self.camera.get(15)))
         except Exception as e:
             self.MsgTE.setPlainText(str(e))
@@ -252,29 +289,50 @@ class CamShow(QMainWindow, Ui_MainWindow):
     def StartCamera(self):
         # ret,fram = self.camera.read()
         # cv2.imshow('video', fram)
-        self.ShowBt.setEnabled(False)
-        self.StopBt.setEnabled(True)
-        self.RecordBt.setEnabled(True)
-        self.GrayImgCkB.setEnabled(True)
-        if self.GrayImgCkB.isChecked() == 0:
-            self.RedColorSld.setEnabled(True)
-            self.RedColorSpB.setEnabled(True)
-            self.GreenColorSld.setEnabled(True)
-            self.GreenColorSpB.setEnabled(True)
-            self.BlueColorSld.setEnabled(True)
-            self.BlueColorSpB.setEnabled(True)
-        self.ExpTimeSld.setEnabled(True)
-        self.ExpTimeSpB.setEnabled(True)
-        self.GainSld.setEnabled(True)
-        self.GainSpB.setEnabled(True)
-        self.BrightSld.setEnabled(True)
-        self.BrightSpB.setEnabled(True)
-        self.ContrastSld.setEnabled(True)
-        self.ContrastSpB.setEnabled(True)
-        self.RecordBt.setText('录像')
+        tag = self.ShowBt.text()
+        if tag == '开始':
+            self.ShowBt.setEnabled(False)
+            #self.ShowBt.setText("查看日志")
+            self.StopBt.setEnabled(True)
+            self.RecordBt.setEnabled(True)
+            self.GrayImgCkB.setEnabled(True)
+            if self.GrayImgCkB.isChecked() == 0:
+                self.RedColorSld.setEnabled(True)
+                self.RedColorSpB.setEnabled(True)
+                self.GreenColorSld.setEnabled(True)
+                self.GreenColorSpB.setEnabled(True)
+                self.BlueColorSld.setEnabled(True)
+                self.BlueColorSpB.setEnabled(True)
+            self.ExpTimeSld.setEnabled(True)
+            self.ExpTimeSpB.setEnabled(True)
+            self.GainSld.setEnabled(True)
+            self.GainSpB.setEnabled(True)
+            self.BrightSld.setEnabled(True)
+            self.BrightSpB.setEnabled(True)
+            self.ContrastSld.setEnabled(True)
+            self.ContrastSpB.setEnabled(True)
+            self.RecordBt.setText('录像')
+            #原来是10，更改为50
+            self.Timer.start(10)
+            self.timelb = time.clock()
+        elif tag == '保存到已有':
+            face_path = "E:/pyqtt/faces/"
+            file_path = QFileDialog.getSaveFileName(self, "保存文件", face_path,
+                                                    "jpg files (*.jpg);;all files(*.*)")
+            #print(file_path[0])
+            cv2.imwrite(file_path[0], self.Image)
+            self.MsgTE.clear()
+            self.MsgTE.setPlainText('Image saved.')
+        # elif tag == '查看日志':
+        #     #self.camera.release()
+        #     pixmap = QPixmap("C:\\Users\\Administrator\\Desktop\\biye\\beijing.jpg")  # 按指定路径找到图片，注意路径必须用双引号包围，不能用单引号
+        #     self.DispLb.setPixmap(pixmap)  # 在label上显示图片
+        #     self.DispLb.setScaledContents(True)  # 让图片自适应label大小
+        #     self.ShowBt.setText("开始")
+            #self.__init__()
+            # log = childWindow()
+            # log.show()
 
-        self.Timer.start(50)
-        self.timelb = time.clock()
 
     def SetFilePath(self):
         dirname = QFileDialog.getExistingDirectory(self, "浏览", '.')
@@ -286,42 +344,70 @@ class CamShow(QMainWindow, Ui_MainWindow):
         success, img = self.camera.read()
         if success:
             if self.checkBox.isChecked():
-                # self.face_recognise(img)
-                t1 = threading.Thread(target=self.face_recognise, args=[img])
-                t1.start()
-                time.sleep(1)
+                self.face_recognise(img)
+                self.flag_2 = True
+                self.flag_3 = True
+                # t1 = threading.Thread(target=self.face_recognise, args=[img])
+                # t1.start()
+                #
+                #
+                # time.sleep(1)
                 try:
-                    self.MsgTE.setPlainText('Based on face_recognition'+'\n'+'The man in camera maybe ' + str(name))
+                    if self.flag_1:
+                        self.MsgTE.setPlainText('Based on face_recognition'+'\n'+'The man in camera maybe ' + str(name))
+                    else:
+                        self.MsgTE.setPlainText('The door is open,please come in!'+
+                                                '\n'+'Based on face_recognition' +
+                                                '\n' + 'The man in camera maybe '
+                                                + str(name))
                 except Exception as e:
                     self.MsgTE.setPlainText(str(e))
                 # t1.stop()
 
             if self.checkBox_2.isChecked():
-                # self.landmark(img)
-                t2 = threading.Thread(target=self.landmark, args=[img])
-                t2.start()
-                time.sleep(1)
+                self.landmark(img)
+                # t2 = threading.Thread(target=self.landmark, args=[img])
+                # t2.start()
+                # time.sleep(1)
 
             if self.checkBox_3.isChecked():
-                t3 = threading.Thread(target=self.dlib_recognise, args=[img])
-                t3.start()
-                time.sleep(1)
+                self.dlib_recognise(img)
+                self.flag_2 = True
+                self.flag_1 = True
+                # t3 = threading.Thread(target=self.dlib_recognise, args=[img])
+                # t3.start()
+                # time.sleep(1)
                 try:
-                    self.MsgTE.setPlainText('Based on dlib'+'\n'+'The man in camera maybe ' + str(name))
+                    self.MsgTE.setPlainText('The door is open,please come in!'+
+                                                '\n'+'Based on dlib'+'\n'+
+                                            'The man in camera maybe ' + str(name))
                 except Exception as e:
                     self.MsgTE.setPlainText(str(e))
 
             if self.checkBox_4.isChecked():
-                t4 = threading.Thread(target=self.blink_recognise, args=[img])
-                t4.start()
-                time.sleep(1)
+                self.blink_recognise(img)
+                # msgBox = Message()
+                # msgBox.setText("Hello!")
+                # # msgBox.setIcon(QMessageBox::Information)
+                # # msgBox.setStandardButtons(QMessageBox::Ok)
+                # msgBox.autoClose = True
+                # msgBox.timeout = 3
+                # msgBox.show()
+                # t4 = threading.Thread(target=self.blink_recognise, args=[img])
+                # t4.start()
+                # time.sleep(1)
 
             if self.checkBox_6.isChecked():
-                t4 = threading.Thread(target=self.opencv_recognise, args=[img])
-                t4.start()
-                time.sleep(1)
+                self.opencv_recognise(img)
+                self.flag_1 = True
+                self.flag_3 = True
+                # t4 = threading.Thread(target=self.opencv_recognise, args=[img])
+                # t4.start()
+                # time.sleep(1)
                 try:
-                    self.MsgTE.setPlainText('Based on opencv'+'\n'+'The man in camera maybe ' + str(name))
+                    self.MsgTE.setPlainText('The door is open,please come in!'+
+                                                '\n'+'Based on opencv'+'\n'+
+                                            'The man in camera maybe ' + str(name))
                 except Exception as e:
                     self.MsgTE.setPlainText(str(e))
 
@@ -343,6 +429,23 @@ class CamShow(QMainWindow, Ui_MainWindow):
             self.MsgTE.clear()
             self.MsgTE.setPlainText('Image obtaining failed.')
 
+    # coding=utf-8
+    # 中文乱码处理,未成功
+    def cv2ImgAddText(self,img, text, left, top, textColor=(0, 255, 0), textSize=20):
+        if (isinstance(img, np.ndarray)):  # 判断是否OpenCV图片类型
+            img = Image.fromarray(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
+        draw = ImageDraw.Draw(img)
+        fontText = ImageFont.truetype(
+            "font/simsun.ttc", textSize, encoding="utf-8")
+        draw.text((left, top), text, textColor, font=fontText)
+        return cv2.cvtColor(np.asarray(img), cv2.COLOR_RGB2BGR)
+
+    # 子窗口调用，未使用此方法
+    def logView(self):
+        # log = childWindow()
+        # log.show()
+        pass
+
     def opencv_recognise(self, img):
         global name
         # 读取训练文件
@@ -354,8 +457,18 @@ class CamShow(QMainWindow, Ui_MainWindow):
             id, confidence = opencv_recognizer.predict(gray[y:y + h, x:x + w])
             cv2.putText(img, face_names[id - 1], (x + 6, y + h - 6), font, 1.0, (0, 255, 255), 1)
             name = face_names[id - 1] + "\nThe confidence:" +str(int(confidence))
+            #name = face_names[id - 1]
+            self.id = id
+        if self.flag_2 and name != 'unknown':
+            nowtime = datetime.datetime.now()
+            self.InsertLog(nowtime)
+            self.flag_2 = False
     # 摄像头帧率太低，不完善
     def blink_recognise(self, img):
+        #QSystemTrayIcon.showMessage()
+
+
+        #msgBox.exec()
         frame_counter = 0  # 连续帧计数
         blink_counter = 0  # 眨眼计数
         gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)  # 转成灰度图像
@@ -382,16 +495,17 @@ class CamShow(QMainWindow, Ui_MainWindow):
             if ear < EYE_AR_THRESH:
                 frame_counter += 1
                 blink_counter += 1
-                print(frame_counter)
+                #print(frame_counter)
             else:
                 if frame_counter >= EYE_AR_CONSEC_FRAMES:
                     blink_counter += 1
                 frame_counter = 0
 
             # 在图像上显示出眨眼次数blink_counter和EAR
-            cv2.putText(img, "Blinks:{0}".format(blink_counter), (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255),
+            cv2.putText(img, "Blinks:{0}".format(blink_counter), (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 0, 0),
                         2)
-            cv2.putText(img, "EAR:{:.2f}".format(ear), (300, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
+            cv2.putText(img, "please blink", (250, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
+            cv2.putText(img, "EAR:{:.2f}".format(ear), (500, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
 
     def eye_aspect_ratio(self, eye):
         # compute the euclidean distances between the two sets of
@@ -416,7 +530,7 @@ class CamShow(QMainWindow, Ui_MainWindow):
 
         # 存储当前摄像头中捕获到的所有人脸的坐标/名字
         # The list to save the positions and names of current faces captured
-        pos_namelist = []
+        #pos_namelist = []
         name_namelist = []
         if len(faces) != 0:
             # 4. 获取当前捕获到的图像的所有人脸的特征，存储到 features_cap_arr
@@ -437,8 +551,8 @@ class CamShow(QMainWindow, Ui_MainWindow):
                 name_namelist.append("unknown")
 
                 # 每个捕获人脸的名字坐标 the positions of faces captured
-                pos_namelist.append(
-                    tuple([faces[k].left(), int(faces[k].bottom() + (faces[k].bottom() - faces[k].top()) / 4)]))
+                # pos_namelist.append(
+                #     tuple([faces[k].left(), int(faces[k].bottom() + (faces[k].bottom() - faces[k].top()) / 4)]))
 
                 # 对于某张人脸，遍历所有存储的人脸特征
                 # For every faces detected, compare the faces in the database
@@ -465,26 +579,31 @@ class CamShow(QMainWindow, Ui_MainWindow):
                     # name_str = person_list[0]
                     # name_str = name_str[:name_str.index(".")]
                     # name_namelist[k] = name_str
-                    print(k)
-                    print(int(similar_person_num))
+                    # print(k)
+                    # print(int(similar_person_num))
                     name_namelist[k] = face_names[int(similar_person_num)]
+                    self.id = int(similar_person_num)+1
                     name = name_namelist[k]
                     # print("May be "+name_str)
-                else:
-                    print("Unknown person")
+                # else:
+                #     print("Unknown person")
 
                 # 矩形框
                 # draw rectangle
                 for kk, d in enumerate(faces):
                     # 绘制矩形框
                     cv2.rectangle(img, tuple([d.left(), d.top()]), tuple([d.right(), d.bottom()]), (255, 0, 0), 2)
+                    cv2.putText(img, name, (d.left()+6, d.bottom()-6), font, 1.0, (0, 255, 255), 1)
                 print('\n')
-
+            if self.flag_3 and name != 'unknown':
+                nowtime = datetime.datetime.now()
+                self.InsertLog(nowtime)
+                self.flag_3 = False
             # 6. 在人脸框下面写人脸名字
             # 6. write names under rectangle
             # font = cv2.FONT_ITALIC
-            for i in range(len(faces)):
-                cv2.putText(img, name_namelist[i], pos_namelist[i], font, 1.0, (0, 255, 255), 1)
+            # for i in range(len(faces)):
+            #     cv2.putText(img, name_namelist[i], pos_namelist[i], font, 1.0, (0, 255, 255), 1)
         # print("Faces in camera now:", name_namelist, "\n")
 
     def return_euclidean_distance(self, feature_1, feature_2):
@@ -504,13 +623,12 @@ class CamShow(QMainWindow, Ui_MainWindow):
         for index, face in enumerate(dets):
             # print('face {}; left {}; top {}; right {}; bottom {}'.format(index, face.left(), face.top(), face.right(),
             #                                                              face.bottom()))
-
             # 画出人脸框
             left = face.left()
             top = face.top()
             right = face.right()
             bottom = face.bottom()
-            cv2.rectangle(img, (left, top), (right, bottom), (0, 255, 0), 3)
+            cv2.rectangle(img, (left, top), (right, bottom), (0, 255, 0), 1)
             # cv2.namedWindow(f, cv2.WINDOW_AUTOSIZE)
             # cv2.imshow(f, img)
             # dlib
@@ -559,30 +677,36 @@ class CamShow(QMainWindow, Ui_MainWindow):
     def face_recognise(self, img):
         global name
         small_frame = cv2.resize(img, (0, 0), fx=0.25, fy=0.25)
+        #img = self.cv2ImgAddText(img, "大家好，我是星爷", 140, 60, (255, 255, 0), 20)
+
         # small_frame = img
         # face_recognise_path = current_path + "\faces"
         #
-
         # 原始一张图片的识别
         # obama_img = face_recognition.load_image_file("XiangMenghui.jpg")
         # face_names.append("XiangMenghui")
         # obama_face_encoding = face_recognition.face_encodings(obama_img)[0]
-        process_this_frame = True
-        if process_this_frame:
-            face_locations = face_recognition.face_locations(small_frame)
-            face_encodings = face_recognition.face_encodings(small_frame, face_locations)
-            #print(face_encodings)
-            for face_encoding in face_encodings:
-                match = face_recognition.compare_faces(face_codings, face_encoding, 0.4)
-                # print(match)
-                for i in range(len(match)):
-                    if match[i]:
-                        name = face_names[i]
-                        break
-                    if i == len(match) - 1:
-                        name = "unknown"
+        # process_this_frame = True
+        # if process_this_frame:
+        #转换成rgb 格式
+        new_frame = small_frame[:, :, ::-1]
+        #默认hog方式
+        ##face_locations = face_recognition.face_locations(new_frame)
+        face_locations = face_recognition.face_locations(new_frame, number_of_times_to_upsample=2, model="hog")
+        face_encodings = face_recognition.face_encodings(new_frame, face_locations)
+        #print(face_encodings)
+        for face_encoding in face_encodings:
+            match = face_recognition.compare_faces(face_codings, face_encoding, 0.4)
+            # print(match)
+            for i in range(len(match)):
+                if match[i]:
+                    name = face_names[i]
+                    self.id = i+1
+                    break
+                if i == len(match) - 1:
+                    name = "unknown"
                 # break
-        process_this_frame = not process_this_frame
+        # process_this_frame = not process_this_frame
 
         for (top, right, bottom, left) in (face_locations):
             top *= 4
@@ -592,6 +716,31 @@ class CamShow(QMainWindow, Ui_MainWindow):
             cv2.rectangle(img, (left, top), (right, bottom), (0, 0, 255), 2)
             # cv2.rectangle(img, (left, bottom - 35), (right, bottom), (0, 0, 255), 2)
             cv2.putText(img, name, (left + 6, bottom - 6), font, 1.0, (0, 255, 255), 1)
+        if self.flag_1 and name != 'unknown':
+            nowtime = datetime.datetime.now()
+            self.InsertLog(nowtime)
+            self.flag_1 = False
+        # else:
+        #     print("success")
+        #QMessageBox.about(self, "提示对话框", "你的Windows系统是DOS1.0")
+
+    def InsertLog(self,nowtime):
+        # 打开数据库连接
+        conn = pymysql.connect(host="", user="root",
+                               password="xmh981127", db="face", port=3306)
+        # 使用cursor()方法获取操作游标
+        cur = conn.cursor()
+        # 1.查询操作
+        # 编写sql 查询语句  user 对应我的表名
+        sql = "insert into log(id, time) values(%s, %s)"
+        try:
+            cur.execute(sql, [self.id, nowtime])  # 执行sql语句
+            conn.commit()
+        except Exception as e:
+            raise e
+        finally:
+            conn.close()  # 关闭连接
+
 
     def ColorAdjust(self, img):
         try:
@@ -626,10 +775,14 @@ class CamShow(QMainWindow, Ui_MainWindow):
         if self.StopBt.text() == '暂停':
             self.StopBt.setText('继续')
             self.RecordBt.setText('保存')
+            self.ShowBt.setEnabled(True)
+            self.ShowBt.setText('保存到已有')
             self.Timer.stop()
         elif self.StopBt.text() == '继续':
             self.StopBt.setText('暂停')
             self.RecordBt.setText('录像')
+            self.ShowBt.setEnabled(False)
+            self.ShowBt.setText('开始')
             self.Timer.start(10)
 
     def RecordCamera(self):
@@ -657,10 +810,33 @@ class CamShow(QMainWindow, Ui_MainWindow):
                 os.makedirs(face_path)
                 file_path = QFileDialog.getSaveFileName(self, "保存文件", face_path,
                                                         "jpg files (*.jpg);;all files(*.*)")
-                print(file_path[0])
+                #print(file_path[0])
+
                 cv2.imwrite(file_path[0], self.Image)
+                namestr = file_path[0]
+                namestr = namestr.split('/')[-1].split('.')[0]
+                #写入数据库
+                # 打开数据库连接
+                conn = pymysql.connect(host="", user="root",
+                                       password="xmh981127", db="face", port=3306)
+
+                # 使用cursor()方法获取操作游标
+                cur = conn.cursor()
+                # 1.查询操作
+                # 编写sql 查询语句  user 对应我的表名
+                sql = "insert into student(id, name) values(%s, %s)"
+                try:
+                    cur.execute(sql, [person_cnt, namestr])  # 执行sql语句
+                    conn.commit()
+                except Exception as e:
+                    raise e
+                finally:
+                    conn.close()  # 关闭连接
+
+                #print(namestr)
                 self.MsgTE.clear()
                 self.MsgTE.setPlainText('Image saved.')
+                # 录入人脸之后便获取特征并更新
                 # os.system("python36 getfacefeatures_to_csv.py")
             except Exception as e:
                 self.MsgTE.clear()
@@ -695,7 +871,12 @@ class CamShow(QMainWindow, Ui_MainWindow):
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)
-    ui = CamShow()
+    ui = MainWindow()
+    child = childWindow()
+
+    btn = ui.showLog
+    btn.clicked.connect(child.show)
+
     ui.show()
 
     sys.exit(app.exec_())

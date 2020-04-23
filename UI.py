@@ -8,12 +8,14 @@
 
 
 from PyQt5 import QtCore, QtGui, QtWidgets
+from PyQt5.QtGui import QPixmap
 
 
 class Ui_MainWindow(object):
     def setupUi(self, MainWindow):
         MainWindow.setObjectName("MainWindow")
         MainWindow.resize(1000, 800)
+        MainWindow.setStyleSheet("#MainWindow{border-image:url(./background.jpg);}")
         self.centralwidget = QtWidgets.QWidget(MainWindow)
         self.centralwidget.setObjectName("centralwidget")
         self.gridLayout = QtWidgets.QGridLayout(self.centralwidget)
@@ -36,6 +38,7 @@ class Ui_MainWindow(object):
         self.frame_5.setFrameShape(QtWidgets.QFrame.StyledPanel)
         self.frame_5.setFrameShadow(QtWidgets.QFrame.Raised)
         self.frame_5.setObjectName("frame_5")
+        self.frame_5.setStyleSheet("#frame_5{border-image:url(./back2.png);}")
         self.gridLayout_6 = QtWidgets.QGridLayout(self.frame_5)
         self.gridLayout_6.setContentsMargins(1, 1, 1, 1)
         self.gridLayout_6.setHorizontalSpacing(1)
@@ -197,15 +200,15 @@ class Ui_MainWindow(object):
         self.checkBox_4 = QtWidgets.QCheckBox(self.EmptyFm)
         self.checkBox_4.setGeometry(QtCore.QRect(90, 200, 101, 31))
         self.checkBox_4.setObjectName("checkBox_4")
-        self.checkBox_5 = QtWidgets.QCheckBox(self.EmptyFm)
-        self.checkBox_5.setGeometry(QtCore.QRect(90, 240, 101, 31))
-        self.checkBox_5.setObjectName("checkBox_5")
         self.checkBox_6 = QtWidgets.QCheckBox(self.EmptyFm)
         self.checkBox_6.setGeometry(QtCore.QRect(90, 80, 211, 31))
         self.checkBox_6.setObjectName("checkBox_6")
         self.checkBox_7 = QtWidgets.QCheckBox(self.EmptyFm)
         self.checkBox_7.setGeometry(QtCore.QRect(90, 120, 211, 31))
         self.checkBox_7.setObjectName("checkBox_7")
+        self.showLog = QtWidgets.QPushButton(self.EmptyFm)
+        self.showLog.setGeometry(QtCore.QRect(90, 240, 75, 23))
+        self.showLog.setObjectName("showLog")
         self.gridLayout_5.addWidget(self.EmptyFm, 4, 1, 1, 3)
         self.gridLayout_2.addWidget(self.SettingsFm, 0, 0, 1, 1)
         self.DispFm = QtWidgets.QFrame(self.frame)
@@ -228,6 +231,9 @@ class Ui_MainWindow(object):
         self.gridLayout_3.addWidget(self.RecordBt, 0, 2, 1, 1)
         self.DispLb = QtWidgets.QLabel(self.DispFm)
         self.DispLb.setText("")
+        pixmap = QPixmap("C:\\Users\\Administrator\\Desktop\\biye\\beijing.jpg")  # 按指定路径找到图片，注意路径必须用双引号包围，不能用单引号
+        self.DispLb.setPixmap(pixmap)  # 在label上显示图片
+        self.DispLb.setScaledContents(True)  # 让图片自适应label大小
         self.DispLb.setScaledContents(True)
         self.DispLb.setObjectName("DispLb")
         self.gridLayout_3.addWidget(self.DispLb, 1, 0, 1, 4)
@@ -301,9 +307,9 @@ class Ui_MainWindow(object):
         self.checkBox_2.setText(_translate("MainWindow", "标记特征点"))
         self.checkBox_3.setText(_translate("MainWindow", "人脸识别-dlib"))
         self.checkBox_4.setText(_translate("MainWindow", "眨眼检测"))
-        self.checkBox_5.setText(_translate("MainWindow", "换脸"))
         self.checkBox_6.setText(_translate("MainWindow", "人脸识别-opencv"))
         self.checkBox_7.setText(_translate("MainWindow", "人脸识别-tensorflow"))
+        self.showLog.setText(_translate("MainWindow", "查看日志"))
         self.ShowBt.setText(_translate("MainWindow", "开始"))
         self.ExitBt.setText(_translate("MainWindow", "退出"))
         self.StopBt.setText(_translate("MainWindow", "暂停"))
