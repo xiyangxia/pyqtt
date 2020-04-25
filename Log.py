@@ -57,7 +57,7 @@ class Ui_Dialog(object):
         cur = conn.cursor()
         # 1.查询操作
         # 编写sql 查询语句  user 对应我的表名
-        sql = "select log.id,name,time from student,log where student.id = log.id order by log.time desc"
+        sql = "select faceserver_log.id_id,name,time from faceserver_student,faceserver_log where faceserver_student.id = faceserver_log.id_id order by faceserver_log.time desc"
         try:
             cur.execute(sql)  # 执行sql语句
 

@@ -1,6 +1,7 @@
 import pymysql
 
-from UI import Ui_MainWindow
+#from UI import Ui_MainWindow
+from UI_new import Ui_MainWindow
 from Log import Ui_Dialog
 import sys
 from MyTipWindow import Message
@@ -732,7 +733,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         cur = conn.cursor()
         # 1.查询操作
         # 编写sql 查询语句  user 对应我的表名
-        sql = "insert into log(id, time) values(%s, %s)"
+        sql = "insert into faceserver_log(id_id, time) values(%s, %s)"
         try:
             cur.execute(sql, [self.id, nowtime])  # 执行sql语句
             conn.commit()
@@ -824,7 +825,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                 cur = conn.cursor()
                 # 1.查询操作
                 # 编写sql 查询语句  user 对应我的表名
-                sql = "insert into student(id, name) values(%s, %s)"
+                sql = "insert into faceserver_student(id, name) values(%s, %s)"
                 try:
                     cur.execute(sql, [person_cnt, namestr])  # 执行sql语句
                     conn.commit()
