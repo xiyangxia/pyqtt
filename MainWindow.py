@@ -1,7 +1,8 @@
 import pymysql
-
-#from UI import Ui_MainWindow
-from UI_new import Ui_MainWindow
+import json
+from face_train import Model
+from UI import Ui_MainWindow
+#from UI_new import Ui_MainWindow
 from Log import Ui_Dialog
 import sys
 from MyTipWindow import Message
@@ -92,7 +93,7 @@ for i in range(csv_rd.shape[0]):
 opencv_recognizer = cv2.face.LBPHFaceRecognizer_create()
 # opencv_recognizer.train(face_sampes, np.array(ids))
 # opencv_recognizer.write('train/train.yml')
-
+name = ""
 EYE_AR_THRESH = 0.18  # EAR阈值
 EYE_AR_CONSEC_FRAMES = 4  # 当EAR小于阈值时，接连多少帧一定发生眨眼动作
 
@@ -117,11 +118,17 @@ class childWindow(QDialog):
 
 class MainWindow(QMainWindow, Ui_MainWindow):
     camera = cv2.VideoCapture(0)
-    name = ""
+
     id = 0
     flag_1 = True
     flag_2 = True
     flag_3 = True
+
+    #cnn
+    model = Model()
+    with open('contrast_table', 'r') as f:
+        contrast_table = json.loads(f.read())
+    model.load_model(file_path='./model/face.model')
     def __del__(self):
         try:
             self.camera.release()  # 释放资源
@@ -342,9 +349,11 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             self.RecordPath = dirname + '/'
 
     def TimerOutFun(self):
+        global name
         success, img = self.camera.read()
         if success:
             if self.checkBox.isChecked():
+                name = "unknown"
                 self.face_recognise(img)
                 self.flag_2 = True
                 self.flag_3 = True
@@ -372,6 +381,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                 # time.sleep(1)
 
             if self.checkBox_3.isChecked():
+                name = "unknown"
                 self.dlib_recognise(img)
                 self.flag_2 = True
                 self.flag_1 = True
@@ -379,9 +389,14 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                 # t3.start()
                 # time.sleep(1)
                 try:
-                    self.MsgTE.setPlainText('The door is open,please come in!'+
-                                                '\n'+'Based on dlib'+'\n'+
-                                            'The man in camera maybe ' + str(name))
+                    if self.flag_3:
+                        self.MsgTE.setPlainText(
+                            'Based on dlib' + '\n' + 'The man in camera maybe ' + str(name))
+                    else:
+                        self.MsgTE.setPlainText('The door is open,please come in!' +
+                                                '\n' + 'Based on dlib' +
+                                                '\n' + 'The man in camera maybe '
+                                                + str(name))
                 except Exception as e:
                     self.MsgTE.setPlainText(str(e))
 
@@ -397,8 +412,13 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                 # t4 = threading.Thread(target=self.blink_recognise, args=[img])
                 # t4.start()
                 # time.sleep(1)
+            if self.checkBox_7.isChecked():
+                name = "unknown"
+                self.cnn_recognise(img)
+
 
             if self.checkBox_6.isChecked():
+                name = "unknown"
                 self.opencv_recognise(img)
                 self.flag_1 = True
                 self.flag_3 = True
@@ -406,9 +426,14 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                 # t4.start()
                 # time.sleep(1)
                 try:
-                    self.MsgTE.setPlainText('The door is open,please come in!'+
-                                                '\n'+'Based on opencv'+'\n'+
-                                            'The man in camera maybe ' + str(name))
+                    if self.flag_2:
+                        self.MsgTE.setPlainText(
+                            'Based on opencv' + '\n' + 'The man in camera maybe ' + str(name))
+                    else:
+                        self.MsgTE.setPlainText('The door is open,please come in!' +
+                                                '\n' + 'Based on opencv' +
+                                                '\n' + 'The man in camera maybe '
+                                                + str(name))
                 except Exception as e:
                     self.MsgTE.setPlainText(str(e))
 
@@ -429,6 +454,29 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         else:
             self.MsgTE.clear()
             self.MsgTE.setPlainText('Image obtaining failed.')
+
+    def cnn_recognise(self,img):
+        frame_gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+
+        faceRects = face_detector.detectMultiScale(frame_gray, scaleFactor=1.2, minNeighbors=3, minSize=(32, 32))
+        if len(faceRects) > 0:
+            for faceRect in faceRects:
+                x, y, w, h = faceRect
+                # 截取脸部图像提交给模型识别这是谁
+                image = img[y - 10: y + h + 10, x - 10: x + w + 10]
+                probability, name_number = self.model.face_predict(image)
+                print(name_number)
+                cname = self.contrast_table[str(name_number)]
+                print(cname)
+                # print('name_number:', name_number)
+                cv2.rectangle(img, (x - 10, y - 10), (x + w + 10, y + h + 10), (0, 255, 0), thickness=2)
+
+                # 文字提示是谁
+                cv2.putText(img, cname, (x + 30, y + 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 255), 2)
+                # if probability > 0.7:
+                #     cv2.putText(frame, name, (x + 30, y + 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 255), 2)
+                # else:
+                #     cv2.putText(frame, 'unknow', (x + 30, y + 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 255), 2)
 
     # coding=utf-8
     # 中文乱码处理,未成功
@@ -460,7 +508,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             name = face_names[id - 1] + "\nThe confidence:" +str(int(confidence))
             #name = face_names[id - 1]
             self.id = id
-        if self.flag_2 and name != 'unknown':
+        if self.flag_2 and name != 'unknown'and self.id != 0:
             nowtime = datetime.datetime.now()
             self.InsertLog(nowtime)
             self.flag_2 = False
@@ -596,7 +644,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                     cv2.rectangle(img, tuple([d.left(), d.top()]), tuple([d.right(), d.bottom()]), (255, 0, 0), 2)
                     cv2.putText(img, name, (d.left()+6, d.bottom()-6), font, 1.0, (0, 255, 255), 1)
                 print('\n')
-            if self.flag_3 and name != 'unknown':
+            if self.flag_3 and name != 'unknown'and self.id != 0:
                 nowtime = datetime.datetime.now()
                 self.InsertLog(nowtime)
                 self.flag_3 = False
@@ -717,7 +765,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             cv2.rectangle(img, (left, top), (right, bottom), (0, 0, 255), 2)
             # cv2.rectangle(img, (left, bottom - 35), (right, bottom), (0, 0, 255), 2)
             cv2.putText(img, name, (left + 6, bottom - 6), font, 1.0, (0, 255, 255), 1)
-        if self.flag_1 and name != 'unknown':
+        if self.flag_1 and name != 'unknown' and self.id != 0:
             nowtime = datetime.datetime.now()
             self.InsertLog(nowtime)
             self.flag_1 = False
