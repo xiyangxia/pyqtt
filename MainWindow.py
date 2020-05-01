@@ -21,10 +21,24 @@ import pandas as pd
 import numpy as np
 from scipy.spatial import distance as dist
 from imutils import face_utils
+from keras.models import load_model
 import datetime
+import ChineseText
 
 #  opencv 检测人脸
 face_detector = cv2.CascadeClassifier('D:/OPENCV/sources/data/haarcascades/haarcascade_frontalface_default.xml')
+gender_classifier = load_model("model/simple_CNN-gender.hdf5")
+emotion_classifier = load_model("model/simple_CNN-emotion.hdf5")
+gender_labels = {0: 'girl', 1: 'boy'}
+emotion_labels = {
+    0: 'angry',
+    1: 'hate',
+    2: 'terror',
+    3: 'happy',
+    4: 'sad',
+    5: 'surprise',
+    6: 'calm'
+}
 
 
 ids = []
@@ -85,7 +99,7 @@ for i in range(csv_rd.shape[0]):
 
 # 每次启动都要执行，浪费效率
 # dlib 获取特征
-# os.system("python36 getfacefeatures_to_csv.py")#程序启动后先提取所有人脸特征，防止后台手动添加人脸
+#os.system("python36 getfacefeatures_to_csv.py")#程序启动后先提取所有人脸特征，防止后台手动添加人脸
 
 # opencv训练
 # print(face_sampes)
@@ -465,9 +479,9 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                 # 截取脸部图像提交给模型识别这是谁
                 image = img[y - 10: y + h + 10, x - 10: x + w + 10]
                 probability, name_number = self.model.face_predict(image)
-                print(name_number)
+                #print(name_number)
                 cname = self.contrast_table[str(name_number)]
-                print(cname)
+                #print(cname)
                 # print('name_number:', name_number)
                 cv2.rectangle(img, (x - 10, y - 10), (x + w + 10, y + h + 10), (0, 255, 0), thickness=2)
 
@@ -497,15 +511,67 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
     def opencv_recognise(self, img):
         global name
+        imgCompose = cv2.imread("compose/maozi-1.jpg")
         # 读取训练文件
         opencv_recognizer.read('train/train.yml')
         gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
         new_faces = face_detector.detectMultiScale(gray)
+
         for x, y, w, h in new_faces:
+            face = img[(y - 60):(y + h + 60), (x - 30):(x + w + 30)]
+            face = cv2.resize(face, (48, 48))
+            face = np.expand_dims(face, 0)
+            face = face / 255.0
+            gender_label_arg = np.argmax(gender_classifier.predict(face))
+            gender = gender_labels[gender_label_arg]
+
+            gray_face = gray[(y):(y + h), (x):(x + w)]
+            gray_face = cv2.resize(gray_face, (48, 48))
+            gray_face = gray_face / 255.0
+            gray_face = np.expand_dims(gray_face, 0)
+            gray_face = np.expand_dims(gray_face, -1)
+            #gray_face = np.expand_dims(gray_face, -1)
+            emotion_label_arg = np.argmax(emotion_classifier.predict(gray_face))
+            emotion = emotion_labels[emotion_label_arg]
+            # print(emotion)
+            #img = ChineseText.cv2ImgAddText(img, gender, x + h, y, (255, 255, 255), 30)
             cv2.rectangle(img, (x, y), (x + w, y + h), (0, 255, 0), 2)
+
             id, confidence = opencv_recognizer.predict(gray[y:y + h, x:x + w])
             cv2.putText(img, face_names[id - 1], (x + 6, y + h - 6), font, 1.0, (0, 255, 255), 1)
+            cv2.putText(img, gender, (x + h, y ), font, 1.0, (0, 255, 255), 1)
+            cv2.putText(img, emotion, (x, y), font, 1.0, (0, 255, 255), 1)
+
             name = face_names[id - 1] + "\nThe confidence:" +str(int(confidence))
+
+            ##合成帽子
+            sp = imgCompose.shape
+            imgComposeSizeH = int(sp[0] / sp[1] * w)
+            if imgComposeSizeH > (y - 20):
+                imgComposeSizeH = (y - 20)
+            imgComposeSize = cv2.resize(imgCompose, (w, imgComposeSizeH), interpolation=cv2.INTER_NEAREST)
+            top = (y - imgComposeSizeH - 20)
+            if top <= 0:
+                top = 0
+            rows, cols, channels = imgComposeSize.shape
+            roi = img[top:top + rows, x:x + cols]
+
+            # Now create a mask of logo and create its inverse mask also
+            img2gray = cv2.cvtColor(imgComposeSize, cv2.COLOR_RGB2GRAY)
+            ret, mask = cv2.threshold(img2gray, 10, 255, cv2.THRESH_BINARY)
+            mask_inv = cv2.bitwise_not(mask)
+
+            # Now black-out the area of logo in ROI
+            img1_bg = cv2.bitwise_and(roi, roi, mask=mask_inv)
+
+            # Take only region of logo from logo image.
+            img2_fg = cv2.bitwise_and(imgComposeSize, imgComposeSize, mask=mask)
+
+            # Put logo in ROI and modify the main image
+            dst = cv2.add(img1_bg, img2_fg)
+            img[top:top + rows, x:x + cols] = dst
+
+            #print(gender)
             #name = face_names[id - 1]
             self.id = id
         if self.flag_2 and name != 'unknown'and self.id != 0:
@@ -673,11 +739,11 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             # print('face {}; left {}; top {}; right {}; bottom {}'.format(index, face.left(), face.top(), face.right(),
             #                                                              face.bottom()))
             # 画出人脸框
-            left = face.left()
-            top = face.top()
-            right = face.right()
-            bottom = face.bottom()
-            cv2.rectangle(img, (left, top), (right, bottom), (0, 255, 0), 1)
+            # left = face.left()
+            # top = face.top()
+            # right = face.right()
+            # bottom = face.bottom()
+            # cv2.rectangle(img, (left, top), (right, bottom), (0, 255, 0), 1)
             # cv2.namedWindow(f, cv2.WINDOW_AUTOSIZE)
             # cv2.imshow(f, img)
             # dlib
@@ -739,6 +805,8 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         # if process_this_frame:
         #转换成rgb 格式
         new_frame = small_frame[:, :, ::-1]
+
+
         #默认hog方式
         ##face_locations = face_recognition.face_locations(new_frame)
         face_locations = face_recognition.face_locations(new_frame, number_of_times_to_upsample=2, model="hog")

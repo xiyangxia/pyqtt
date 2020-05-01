@@ -209,7 +209,7 @@ class Model:
 
         # 给出类别预测：0-9
         result = self.model.predict_classes(image)
-        if max(result_probability[0]) < 0.9:
+        if max(result_probability[0]) < 0.75:
             result[0] = 100
         # 返回类别预测结果
         return max(result_probability[0]),result[0]
@@ -231,3 +231,7 @@ if __name__ == '__main__':
     model.train(dataset)
     model.save_model(file_path='./model/face.model')
     model.evaluate(dataset)
+    ##实验室
+    #{"0": "Xiangmenghui", "1": "yangjing", "2": "liuzirui", "3": "wangyufei", "4": "guoxiaoqi", "5": "zhaoying", "6": "liuyuexiang", "100": "unknown"}
+    ##宿舍暗光
+    #{"0": "liuyuexiang", "1": "zhaoying", "2": "guoxiaoqi", "3": "Xiangmenghui", "4": "wangyufei", "100": "unknown"}
