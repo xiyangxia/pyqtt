@@ -38,7 +38,7 @@ class Ui_MainWindow(object):
         self.frame_5.setFrameShape(QtWidgets.QFrame.StyledPanel)
         self.frame_5.setFrameShadow(QtWidgets.QFrame.Raised)
         self.frame_5.setObjectName("frame_5")
-        self.frame_5.setStyleSheet("#frame_5{border-image:url(./back2.png);}")
+        #self.frame_5.setStyleSheet("#frame_5{border-image:url(./back2.png);}")
         self.gridLayout_6 = QtWidgets.QGridLayout(self.frame_5)
         self.gridLayout_6.setContentsMargins(1, 1, 1, 1)
         self.gridLayout_6.setHorizontalSpacing(1)

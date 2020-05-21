@@ -4,8 +4,9 @@ import os
 import cv2
 import numpy as np
 
-IMAGE_SIZE = 64
-
+##face_facenet是160，，face.model是64
+IMAGE_SIZE = 160
+#IMAGE_SIZE = 64
 
 # 按照指定图像大小调整尺寸
 def resize_image(image, height=IMAGE_SIZE, width=IMAGE_SIZE):

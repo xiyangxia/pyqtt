@@ -1,6 +1,6 @@
 import pymysql
 import json
-from face_train import Model
+from face_train import Modell
 from UI import Ui_MainWindow
 #from UI_new import Ui_MainWindow
 from Log import Ui_Dialog
@@ -44,7 +44,6 @@ emotion_labels = {
 ids = []
 face_names = []
 face_codings = []
-
 face_sampes = []
 person_list = os.listdir("faces/")
 for i in range(len(person_list)):
@@ -139,10 +138,12 @@ class MainWindow(QMainWindow, Ui_MainWindow):
     flag_3 = True
 
     #cnn
-    model = Model()
+    model = Modell()
     with open('contrast_table', 'r') as f:
         contrast_table = json.loads(f.read())
-    model.load_model(file_path='./model/face.model')
+    model.load_model(file_path='./model/face-facenet.model')
+    ##face_facenet 对应的contrast
+    ##{"0": "wangyufei", "1": "Xiangmenghui", "2": "yangjing", "3": "liuzirui", "4": "guoxiaoqi", "5": "liuyuexiang", "6": "zhaoying"}
     def __del__(self):
         try:
             self.camera.release()  # 释放资源
@@ -456,7 +457,8 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             self.Image_num += 1
             if self.RecordFlag:
                 self.video_writer.write(img)
-            ###计算帧率？
+
+            ###计算帧率
             if self.Image_num % 10 == 9:
                 frame_rate = 10 / (time.clock() - self.timelb)
                 self.FmRateLCD.display(frame_rate)
@@ -509,6 +511,11 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         # log.show()
         pass
 
+
+    # 通过对全局图像进行LBP特征提取得到LBP图，LBP特征图是不能直接来作人脸识别的，
+    # 需要对LBP特征图进行分块并计算每个分块的直方图，通过直方图的统计信息进行识别，
+    # 最后将各块的直方图首尾相连就得到一张图片最终的LBP特征描述向量。
+    # 计算两张图片的LBP特征向量的相似度即可实现人脸识别。
     def opencv_recognise(self, img):
         global name
         imgCompose = cv2.imread("compose/maozi-1.jpg")
@@ -518,6 +525,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         new_faces = face_detector.detectMultiScale(gray)
 
         for x, y, w, h in new_faces:
+            #性别识别
             face = img[(y - 60):(y + h + 60), (x - 30):(x + w + 30)]
             face = cv2.resize(face, (48, 48))
             face = np.expand_dims(face, 0)
@@ -525,6 +533,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             gender_label_arg = np.argmax(gender_classifier.predict(face))
             gender = gender_labels[gender_label_arg]
 
+            #情绪识别，不太准确
             gray_face = gray[(y):(y + h), (x):(x + w)]
             gray_face = cv2.resize(gray_face, (48, 48))
             gray_face = gray_face / 255.0
@@ -544,7 +553,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
             name = face_names[id - 1] + "\nThe confidence:" +str(int(confidence))
 
-            ##合成帽子
+            ##合成帽子，也可以合成其他的
             sp = imgCompose.shape
             imgComposeSizeH = int(sp[0] / sp[1] * w)
             if imgComposeSizeH > (y - 20):
@@ -638,6 +647,11 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         # return the eye aspect ratio
         return ear
 
+    # 识别模型：基于 Dlib 的 ResNet 预训练模型（dlib_face_recognition_resnet_model_v1.dat）
+    # 识别算法：ResNet 神经网络（This model is a ResNet network with 29 conv layers.
+    # It's essentially a version of the ResNet-34 network from the paper Deep Residual Learning for Image Recognition by
+    #  He, Zhang, Ren, and Sun with a few layers removed and the number of filters per layer reduced by
+    #  half）
     def dlib_recognise(self, img):
         global name
         img_gray = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
@@ -709,7 +723,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                     # 绘制矩形框
                     cv2.rectangle(img, tuple([d.left(), d.top()]), tuple([d.right(), d.bottom()]), (255, 0, 0), 2)
                     cv2.putText(img, name, (d.left()+6, d.bottom()-6), font, 1.0, (0, 255, 255), 1)
-                print('\n')
+                #print('\n')
             if self.flag_3 and name != 'unknown'and self.id != 0:
                 nowtime = datetime.datetime.now()
                 self.InsertLog(nowtime)
@@ -769,7 +783,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                 #print(index)
                 for i in range(len(pt)):
                     #pt_pos = (pt[i].x, pt[i].y)
-                    cv2.circle(img, pt[i], 2, (0, 0, 255), 2)
+                    cv2.circle(img, pt[i], 2, (0, 0, 255), 1)
 
             # print("I found {} face(s) in this photograph.".format(len(face_landmarks_list)))
 
@@ -997,3 +1011,16 @@ if __name__ == '__main__':
     ui.show()
 
     sys.exit(app.exec_())
+
+
+##  5月6号  facenet模型对应contrast
+##{"0": "wangyufei", "1": "Xiangmenghui", "2": "yangjing", "3": "liuzirui", "4": "guoxiaoqi", "5": "liuyuexiang", "6": "zhaoying"}
+
+
+##  5月7号  失误ResNet50模型对应contrast
+##{"0": "guoxiaoqi", "1": "yangjing", "2": "wangyufei", "3": "liuzirui", "4": "zhaoying", "5": "Xiangmenghui", "6": "liuyuexiang"}
+##  5月8号  失误简单cnn模型对应contrast
+##{"0": "liuyuexiang", "1": "wangyufei", "2": "zhaoying", "3": "Xiangmenghui", "4": "yangjing", "5": "guoxiaoqi", "6": "liuzirui"}
+
+##  5月9号  失误ResNet50模型对应contrast
+##{"0": "liuzirui", "1": "liuyuexiang", "2": "guoxiaoqi", "3": "yangjing", "4": "Xiangmenghui", "5": "zhaoying", "6": "wangyufei"}

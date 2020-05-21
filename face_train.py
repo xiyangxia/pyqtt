@@ -1,5 +1,6 @@
 import random
 
+import keras
 from keras import backend as K
 from keras.layers import Convolution2D, MaxPooling2D
 from keras.layers import Dense, Dropout, Activation, Flatten
@@ -9,6 +10,8 @@ from keras.optimizers import SGD
 from keras.preprocessing.image import ImageDataGenerator
 from keras.utils import np_utils
 from sklearn.model_selection import train_test_split
+from tensorflow.python.keras.models import model_from_json
+from keras.models import Model, Sequential
 
 from load_data import load_dataset, resize_image, IMAGE_SIZE
 
@@ -49,7 +52,8 @@ class Dataset:
 
         # 当前的维度顺序如果为'th'，则输入图片数据时的顺序为：channels,rows,cols，否则:rows,cols,channels
         # 这部分代码就是根据keras库要求的维度顺序重组训练数据集
-        if K.image_dim_ordering() == 'th':
+        #if K.image_dim_ordering() == 'th':
+        if K.image_data_format() == 'channels_first':
             train_images = train_images.reshape(train_images.shape[0], img_channels, img_rows, img_cols)
             valid_images = valid_images.reshape(valid_images.shape[0], img_channels, img_rows, img_cols)
             test_images = test_images.reshape(test_images.shape[0], img_channels, img_rows, img_cols)
@@ -90,50 +94,92 @@ class Dataset:
             self.valid_labels = valid_labels
             self.test_labels = test_labels
 
+            #print(self.train_images.shape[0])
 
 # CNN网络模型类
-class Model:
-    def __init__(self):
-        self.model = None
+class Modell:
 
         # 建立模型
-
+        ## 简单cnn神经网络
     def build_model(self, dataset, nb_classes=5):
-        # 构建一个空的网络模型，它是一个线性堆叠模型，各神经网络层会被顺序添加，专业名称为序贯模型或线性堆叠模型
-        self.model = Sequential()
 
-        # 以下代码将顺序添加CNN网络需要的各层，一个add就是一个网络层
-        self.model.add(Convolution2D(32, 3, 3, border_mode='same',
+
+         self.model = Sequential()
+
+
+         self.model.add(Convolution2D(32, 3, 3, border_mode='same',
                                      input_shape=dataset.input_shape))  # 1 2维卷积层 卷积核 个数，大小，步长
-        self.model.add(Activation('relu'))  # 2 激活函数层
+         self.model.add(Activation('relu'))  # 2 激活函数层
 
-        self.model.add(Convolution2D(32, 3, 3))  # 3 2维卷积层
-        self.model.add(Activation('relu'))  # 4 激活函数层
+         self.model.add(Convolution2D(32, 3, 3))  # 3 2维卷积层
+         self.model.add(Activation('relu'))  # 4 激活函数层
 
-        self.model.add(MaxPooling2D(pool_size=(2, 2)))  # 5 池化层
-        self.model.add(Dropout(0.25))  # 6 Dropout层
+         self.model.add(MaxPooling2D(pool_size=(2, 2)))  # 5 池化层
+         self.model.add(Dropout(0.25))  # 6 Dropout层
 
-        self.model.add(Convolution2D(64, 3, 3, border_mode='same'))  # 7  2维卷积层
-        self.model.add(Activation('relu'))  # 8  激活函数层
+         self.model.add(Convolution2D(64, 3, 3, border_mode='same'))  # 7  2维卷积层
+         self.model.add(Activation('relu'))  # 8  激活函数层
 
-        self.model.add(Convolution2D(64, 3, 3))  # 9  2维卷积层
-        self.model.add(Activation('relu'))  # 10 激活函数层
+         self.model.add(Convolution2D(64, 3, 3))  # 9  2维卷积层
+         self.model.add(Activation('relu'))  # 10 激活函数层
 
-        self.model.add(MaxPooling2D(pool_size=(2, 2)))  # 11 池化层
-        self.model.add(Dropout(0.25))  # 12 Dropout层
+         self.model.add(MaxPooling2D(pool_size=(2, 2)))  # 11 池化层
+         self.model.add(Dropout(0.25))  # 12 Dropout层
+    #
+         self.model.add(Flatten())  # 13 Flatten层
+         self.model.add(Dense(512))  # 14 Dense层,又被称作全连接层
+         self.model.add(Activation('relu'))  # 15 激活函数层
+         self.model.add(Dropout(0.5))  # 16 Dropout层
+         self.model.add(Dense(nb_classes))  # 17 Dense层
+         self.model.add(Activation('softmax'))  # 18 分类层，输出最终结果
 
-        self.model.add(Flatten())  # 13 Flatten层
-        self.model.add(Dense(512))  # 14 Dense层,又被称作全连接层
-        self.model.add(Activation('relu'))  # 15 激活函数层
-        self.model.add(Dropout(0.5))  # 16 Dropout层
-        self.model.add(Dense(nb_classes))  # 17 Dense层
-        self.model.add(Activation('softmax'))  # 18 分类层，输出最终结果
+    #     # 输出模型概况
+         self.model.summary()
 
-        # 输出模型概况
+    ##ResNet50 残差神经网络
+    def build_model_ResNet(self, dataset, nb_classes=5):
+
+        # 模型底层使用 ResNet50 对原始图像进行建模，特征抽取
+        resnet50_weights = "./model/ResNet50.h5"
+        resnet = keras.applications.resnet50.ResNet50(weights=None, include_top=False, input_shape=(160, 160, 3))
+        ##预加载权重
+        #resnet.load_weights(resnet50_weights,by_name=True)
+        # resnet = load_model('./model/facenet_keras.h5')
+        # print(resnet.inputs)
+        # print(resnet.outputs)
+        model = Sequential()
+        # model.add(Flatten(input_shape=resnet.output_shape[1:]))  # 13 Flatten层
+        # model.add(Dense(512))  # 14 Dense层,又被称作全连接层
+        # model.add(Activation('relu'))  # 15 激活函数层
+        # model.add(Dropout(0.5))  # 16 Dropout层
+        # model.add(Flatten(input_shape=(160, 160, 3)))
+        model.add(Flatten(input_shape=resnet.output_shape[1:]))
+        model.add(Dense(nb_classes))  # 17 Dense层
+        model.add(Activation('softmax'))  # 18 分类层，输出最终结果
+
+        self.model = Model(inputs=resnet.input, outputs=model(resnet.output))
         self.model.summary()
 
-    # 训练模型
-    def train(self, dataset, batch_size=20, nb_epoch=10, data_augmentation=True):
+        ##FaceNet网络
+        def build_model_FaceNet(self, dataset, nb_classes=5):
+            resnet = load_model('./model/facenet_keras.h5')
+            print(resnet.inputs)
+            print(resnet.outputs)
+            model = Sequential()
+            # model.add(Flatten(input_shape=resnet.output_shape[1:]))  # 13 Flatten层
+            # model.add(Dense(512))  # 14 Dense层,又被称作全连接层
+            # model.add(Activation('relu'))  # 15 激活函数层
+            # model.add(Dropout(0.5))  # 16 Dropout层
+            # model.add(Flatten(input_shape=(160, 160, 3)))
+            model.add(Flatten(input_shape=resnet.output_shape[1:]))
+            model.add(Dense(nb_classes))  # 17 Dense层
+            model.add(Activation('softmax'))  # 18 分类层，输出最终结果
+
+            self.model = Model(inputs=resnet.input, outputs=model(resnet.output))
+            self.model.summary()
+
+        # 训练模型
+    def train(self, dataset, batch_size=20, nb_epoch=10, data_augmentation = True):
         sgd = SGD(lr=0.0007, decay=1e-6,
                   momentum=0.9, nesterov=True)  # 采用SGD+momentum的优化器进行训练，首先生成一个优化器对象
         self.model.compile(loss='categorical_crossentropy',
@@ -187,6 +233,11 @@ class Model:
         score = self.model.evaluate(dataset.test_images, dataset.test_labels, verbose=1)
         # print("%s: %.2f%%" % (self.model.metrics_names[1], score[1] * 100))
 
+    def classes_id(self):
+        with open('train_class_idx.txt','r') as f:
+            lines = f.readlines()
+            lines = [line.rstrip() for line in lines]
+        return lines
     # 识别人脸
     def face_predict(self, image):
         # 依然是根据后端系统确定维度顺序
@@ -200,19 +251,36 @@ class Model:
             image = image.reshape((1, IMAGE_SIZE, IMAGE_SIZE, 3))
 
             # 浮点并归一化
+        #image = image.reshape((1, 3, IMAGE_SIZE, IMAGE_SIZE))
         image = image.astype('float32')
         image /= 255
 
+
+        result_probability = self.model.predict(image).tolist()[0]
+        print(result_probability.index(max(result_probability)))
+        # label = self.classes_id()[result_probability.index(max(result_probability))]
+        # print(len(self.classes_id()))
+        # #print('result:', result_probability, max(result_probability))
+        # print(label)
+
         # 给出输入属于各个类别的概率
-        result_probability = self.model.predict_proba(image)
-        #print('result:', result_probability, max(result_probability[0]))
+        # result_probability = self.model.predict_proba(image)
+        # print('result:', result_probability, max(result_probability[0]))
 
         # 给出类别预测：0-9
-        result = self.model.predict_classes(image)
-        if max(result_probability[0]) < 0.75:
-            result[0] = 100
+        #result = self.model.predict_classes(image)
+
         # 返回类别预测结果
-        return max(result_probability[0]),result[0]
+        return max(result_probability), result_probability.index(max(result_probability))
+        # # 给出输入属于各个类别的概率
+        # result_probability = self.model.predict_proba(image)
+        # 给出类别预测：0-9
+        # result = self.model.predict_classes(image)
+        # print(result)
+        # if max(result_probability[0])<0.9:
+        #     result[0] = 100
+        # # 返回类别预测结果
+        # return max(result_probability[0]),result[0]
         # value = result[0].tolist()
         # max_sum = max(value)
         # print(max_sum)
@@ -223,15 +291,15 @@ class Model:
         #     return None
         #
 
+        #
+        # if max(result_probability) < 0.7:
+        #     label = "unknown"
+        # return max(result_probability), label
 if __name__ == '__main__':
     dataset = Dataset('./data/')
     dataset.load()
-    model = Model()
+    model = Modell()
     model.build_model(dataset, dataset.nb_classes)
     model.train(dataset)
     model.save_model(file_path='./model/face.model')
     model.evaluate(dataset)
-    ##实验室
-    #{"0": "Xiangmenghui", "1": "yangjing", "2": "liuzirui", "3": "wangyufei", "4": "guoxiaoqi", "5": "zhaoying", "6": "liuyuexiang", "100": "unknown"}
-    ##宿舍暗光
-    #{"0": "liuyuexiang", "1": "zhaoying", "2": "guoxiaoqi", "3": "Xiangmenghui", "4": "wangyufei", "100": "unknown"}
